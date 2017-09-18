@@ -4,8 +4,8 @@
 
 #include <stdio.h>
 
-#define N 16
-#define BLOCK_SIZE 16
+#define N  2048 //16
+#define BLOCK_SIZE 16 //16
 #define NUM_BLOCKS N/BLOCK_SIZE
 
 #define ARRAY_SIZE N
@@ -14,6 +14,7 @@
 /* Declare  statically four arrays of ARRAY_SIZE each */
 unsigned int cpu_block[ARRAY_SIZE];
 
+/* Kernel that is loaded into the GPU */
 __global__ 
 void hello(int * block)
 {
