@@ -1,21 +1,24 @@
 clear;
+
+#Required for fir1
 pkg load signal;
 
-len = 4096; #Points to be plotted - freq response
+#Points to be plotted - freq response
+len = 4096; 
 
-#Primary stage constants
+#FIR filter characterization
 decimation_rate = 2;
-f2 = 1/decimation_rate;    #Stop
-f1 = 0.9*f2;        #Pass
-N = 63;             #Taps
+f2 = 1/decimation_rate;   #Stop
+f1 = 0.9*f2;              #Pass
+N = 63;                   #Taps
 
-Fs = 2;
+#Plot parameters
+Fs = 2;                   
 f_axis = linspace(-Fs/2,Fs/2,len);
 
-#Primary stage filter
+#Generate FIR filter
 f = [0 f1 f2 1];
 m = [1 1 0 0];
-#hc1 = firls(N, f, m)';
 hc1 = fir1(N, f2);
 fc1 = abs(fftshift(fft(hc1,len)));
 
@@ -30,6 +33,7 @@ legend("Response", "Pass", "Stop", "Quantized");
 grid on;
 #}
 
+#Write filter coefficients to file
 fileName = ["fir_dec_", num2str(decimation_rate), "_taps_",  num2str(N+1), ".txt"];
 fid = fopen(fileName, 'w+');
 for i = 1:N
