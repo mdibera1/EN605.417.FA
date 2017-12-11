@@ -62,7 +62,7 @@ __device__
 void sum_array(float * sdata, const unsigned int blockSize, const unsigned int tid)
 {
 //Temporary fix
-#if 1
+#if 0
     if(tid==0)
     {
         for(unsigned int i=1; i<blockSize; i++)
@@ -70,6 +70,16 @@ void sum_array(float * sdata, const unsigned int blockSize, const unsigned int t
     }
     return;
 #endif
+    for (unsigned int s=blockSize/2; s>0; s>>=1) {
+        if(tid < s) 
+        {
+            sdata[tid] += sdata[tid + s];
+        }
+        __syncthreads();
+    }
+    return;
+
+
 //TODO: Figure out why this parallel adder doesn't work
     if(blockSize >= 512) 
     {
@@ -320,7 +330,7 @@ int main(int argc, char *argv[])
 #else
     FILE * oFile;
     oFile = fopen("outputIQ.txt", "w+");
-    for(unsigned int i=0; i<array_size; i++)
+    for(unsigned int i=0; i<array_size/1; i++)
     {
         fprintf(oFile, "%f,%f\r\n", cpu_I_result_buffer[i], cpu_Q_result_buffer[i]);
     }
