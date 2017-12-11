@@ -165,8 +165,6 @@ void decimate(float * input_buffer, float * output_buffer, const unsigned int de
 void main_sub0()
 {
 	// Declare pointers for GPU based params
-    //float *gpu_input_buffer;
-    //float *gpu_output_buffer;
     float *gpu_I_in_buffer;
     float *gpu_I_mixed_buffer;
     float *gpu_I_result_buffer;
@@ -184,11 +182,6 @@ void main_sub0()
 
     //Copy Constant data
     cudaMemcpyToSymbol(fir_coef, &cpu_fir_coef, fir_size_in_bytes);
-
-    //Create stream
-    //cudaStream_t stream1, stream2;
-    //cudaStreamCreate(&stream1);
-    //cudaStreamCreate(&stream2);
 
 #if SHOW_ELAPSED_TIME
     float ms;

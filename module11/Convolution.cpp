@@ -18,6 +18,9 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <stdlib.h>
+
+#define NUMBER_OF_ITERATIONS 5
 
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
@@ -30,9 +33,12 @@
 #endif
 
 // Constants
-const unsigned int inputSignalWidth  = 8;
-const unsigned int inputSignalHeight = 8;
+const unsigned int inputSignalWidth  = 49;
+const unsigned int inputSignalHeight = 49;
 
+cl_uint inputSignal[inputSignalWidth][inputSignalHeight];
+
+/*
 cl_uint inputSignal[inputSignalWidth][inputSignalHeight] =
 {
 	{3, 1, 1, 4, 8, 2, 1, 3},
@@ -44,18 +50,25 @@ cl_uint inputSignal[inputSignalWidth][inputSignalHeight] =
 	{3, 0, 8, 8, 9, 4, 4, 4},
 	{5, 9, 8, 1, 8, 1, 1, 1}
 };
+*/
 
-const unsigned int outputSignalWidth  = 6;
-const unsigned int outputSignalHeight = 6;
+const unsigned int outputSignalWidth  = 10;
+const unsigned int outputSignalHeight = 10;
 
 cl_uint outputSignal[outputSignalWidth][outputSignalHeight];
 
-const unsigned int maskWidth  = 3;
-const unsigned int maskHeight = 3;
+const unsigned int maskWidth  = 7;
+const unsigned int maskHeight = 7;
 
 cl_uint mask[maskWidth][maskHeight] =
 {
-	{1, 1, 1}, {1, 0, 1}, {1, 1, 1},
+	{1, 1, 1, 1, 1, 1, 1}, 
+    {1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 0, 1, 1, 1}, 
+    {1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1},
+    {1, 1, 1, 1, 1, 1, 1}
 };
 
 ///
@@ -81,6 +94,18 @@ void CL_CALLBACK contextCallback(
 	exit(1);
 }
 
+void generateInputSignal(unsigned int inputSignalWidth, unsigned int inputSignalHeight)
+{
+    for(int c=0; c<inputSignalWidth; c++)
+    {
+        for(int r=0; r<inputSignalHeight; r++)
+        {
+            inputSignal[c][r] = (cl_uint)(rand() % 10);
+        }
+    }
+
+}
+
 ///
 //	main() for Convoloution example
 //
@@ -99,6 +124,7 @@ int main(int argc, char** argv)
 	cl_mem outputSignalBuffer;
 	cl_mem maskBuffer;
 
+    generateInputSignal(inputSignalWidth, inputSignalHeight);
     // First, select an OpenCL platform to run on.  
 	errNum = clGetPlatformIDs(0, NULL, &numPlatforms);
 	checkErr( 
@@ -245,7 +271,7 @@ int main(int argc, char** argv)
 	queue = clCreateCommandQueue(
 		context,
 		deviceIDs[0],
-		0,
+		CL_QUEUE_PROFILING_ENABLE,
 		&errNum);
 	checkErr(errNum, "clCreateCommandQueue");
 
@@ -258,31 +284,47 @@ int main(int argc, char** argv)
 
 	const size_t globalWorkSize[1] = { outputSignalWidth * outputSignalHeight };
     const size_t localWorkSize[1]  = { 1 };
-
-    // Queue the kernel up for execution across the array
-    errNum = clEnqueueNDRangeKernel(
-		queue, 
-		kernel, 
-		1, 
-		NULL,
-        globalWorkSize, 
-		localWorkSize,
-        0, 
-		NULL, 
-		NULL);
-	checkErr(errNum, "clEnqueueNDRangeKernel");
+    cl_event event;
+    cl_ulong time_start = 0, time_end = 0, elapsed = 0;
     
-	errNum = clEnqueueReadBuffer(
-		queue, 
-		outputSignalBuffer, 
-		CL_TRUE,
-        0, 
-		sizeof(cl_uint) * outputSignalHeight * outputSignalHeight, 
-		outputSignal,
-        0, 
-		NULL, 
-		NULL);
-	checkErr(errNum, "clEnqueueReadBuffer");
+    for(int i=0; i<NUMBER_OF_ITERATIONS; i++)
+    {
+        // Queue the kernel up for execution across the array
+        errNum = clEnqueueNDRangeKernel(
+		    queue, 
+		    kernel, 
+		    1, 
+		    NULL,
+            globalWorkSize, 
+		    localWorkSize,
+            0, 
+		    NULL, 
+		    &event);
+	    checkErr(errNum, "clEnqueueNDRangeKernel");
+        
+        errNum = clWaitForEvents(1, &event); 
+        checkErr(errNum, "clWaitForEvents");
+        errNum = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_START, sizeof(cl_ulong), &time_start, NULL);
+        checkErr(errNum, "clGetEventProfilingInfo 1");
+        errNum = clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong), &time_end, NULL);
+        checkErr(errNum, "clGetEventProfilingInfo 2");
+        elapsed = (time_end - time_start);
+        errNum = clReleaseEvent(event);
+        checkErr(errNum, "clReleaseEvent");
+        std::cout << (double)(elapsed / 1000.0) << " uS" << std::endl;
+
+	    errNum = clEnqueueReadBuffer(
+		    queue, 
+		    outputSignalBuffer, 
+		    CL_TRUE,
+            0, 
+		    sizeof(cl_uint) * outputSignalHeight * outputSignalHeight, 
+		    outputSignal,
+            0, 
+		    NULL, 
+		    NULL);
+	    checkErr(errNum, "clEnqueueReadBuffer");
+    }
 
     // Output the result buffer
     for (int y = 0; y < outputSignalHeight; y++)

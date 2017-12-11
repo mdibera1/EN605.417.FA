@@ -17,11 +17,14 @@
 #include <fstream>
 #include <sstream>
 
+#define CL_USE_DEPRECATED_OPENCL_1_2_APIS
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
 #else
 #include <CL/cl.h>
 #endif
+
+int main_sub0(const char* fileName);
 
 ///
 //  Constants
@@ -224,7 +227,17 @@ void Cleanup(cl_context context, cl_command_queue commandQueue,
 ///
 //	main() for HelloWorld example
 //
-int main(int argc, char** argv)
+int main()
+{
+    main_sub0("HelloWorld_add.cl");
+    main_sub0("HelloWorld_sub.cl");
+    main_sub0("HelloWorld_mul.cl");
+    main_sub0("HelloWorld_div.cl");
+    main_sub0("HelloWorld_pow.cl");
+    return 0;
+}
+
+int main_sub0(const char* fileName)
 {
     cl_context context = 0;
     cl_command_queue commandQueue = 0;
@@ -252,7 +265,7 @@ int main(int argc, char** argv)
     }
 
     // Create OpenCL program from HelloWorld.cl kernel source
-    program = CreateProgram(context, device, "HelloWorld.cl");
+    program = CreateProgram(context, device, fileName); //"HelloWorld.cl");
     if (program == NULL)
     {
         Cleanup(context, commandQueue, program, kernel, memObjects);
@@ -277,7 +290,7 @@ int main(int argc, char** argv)
     for (int i = 0; i < ARRAY_SIZE; i++)
     {
         a[i] = (float)i;
-        b[i] = (float)(i * 2);
+        b[i] = (float)(i + 1);
     }
 
     if (!CreateMemObjects(context, memObjects, a, b))

@@ -238,12 +238,12 @@ int main(int argc, char** argv)
 
         cl_kernel kernel = clCreateKernel(
             program,
-            "square",
+            "average",
             &errNum);
-        checkErr(errNum, "clCreateKernel(square)");
+        checkErr(errNum, "clCreateKernel(average)");
 
         errNum = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&buffers[i]);
-        checkErr(errNum, "clSetKernelArg(square)");
+        checkErr(errNum, "clSetKernelArg(average)");
 
         kernels.push_back(kernel);
     }
@@ -298,7 +298,7 @@ int main(int argc, char** argv)
     {
         cl_event event;
 
-        size_t gWI = NUM_BUFFER_ELEMENTS;
+        size_t gWI = NUM_BUFFER_ELEMENTS / 4;
 
         errNum = clEnqueueNDRangeKernel(
             queues[i], 
@@ -356,7 +356,7 @@ int main(int argc, char** argv)
             buffers[0],
             CL_TRUE,
             0,
-            sizeof(int) * NUM_BUFFER_ELEMENTS * numDevices,
+            sizeof(int) * NUM_BUFFER_ELEMENTS/4 * numDevices,
             (void*)inputOutput,
             0,
             NULL,
@@ -366,7 +366,7 @@ int main(int argc, char** argv)
     // Display output in rows
     for (unsigned i = 0; i < numDevices; i++)
     {
-        for (unsigned elems = i * NUM_BUFFER_ELEMENTS; elems < ((i+1) * NUM_BUFFER_ELEMENTS); elems++)
+        for (unsigned elems = i * NUM_BUFFER_ELEMENTS; elems < ((i+1) * NUM_BUFFER_ELEMENTS/4); elems++)
         {
             std::cout << " " << inputOutput[elems];
         }

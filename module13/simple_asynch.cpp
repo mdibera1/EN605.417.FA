@@ -18,6 +18,8 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <unistd.h>
+#include <cstdlib>
 
 #include "info.hpp"
 
@@ -52,10 +54,30 @@ int main(int argc, char** argv)
     cl_context context1;
     cl_program program1;
     int * inputOutput1;
+    int numRuns = 1;
 
     int platform = DEFAULT_PLATFORM; 
 
-    std::cout << "Simple buffer and sub-buffer Example" << std::endl;
+    // Argument parsing using getopt
+    // http://www.gnu.org/software/libc/manual/html_node/Example-of-Getopt.html#Example-of-Getopt
+    // -b <int> sets the number of GPU blocks
+    // -t <int> sets the nubmer of GPU threads
+    // -v Sets verbose flag - shows math results
+
+    int c;
+    
+    while ((c = getopt (argc, argv, "r:")) != -1)
+    switch (c)
+    {
+        case 'r':
+            numRuns = atoi(optarg);
+            break;
+        default:
+            printf("USAGE:\n-r <int> Number of runs\n");
+            return EXIT_SUCCESS;
+    }
+
+    //std::cout << "Simple buffer and sub-buffer Example" << std::endl;
 
     // First, select an OpenCL platform to run on.  
     errNum = clGetPlatformIDs(0, NULL, &numPlatforms);
@@ -66,7 +88,7 @@ int main(int argc, char** argv)
     platformIDs = (cl_platform_id *)alloca(
             sizeof(cl_platform_id) * numPlatforms);
 
-    std::cout << "Number of platforms: \t" << numPlatforms << std::endl; 
+    //std::cout << "Number of platforms: \t" << numPlatforms << std::endl; 
 
     errNum = clGetPlatformIDs(numPlatforms, platformIDs, NULL);
     checkErr( 
@@ -256,21 +278,21 @@ int main(int argc, char** argv)
  
     cl_kernel kernel0 = clCreateKernel(
      program0,
-     "square",
+     "concurrent_square",
      &errNum);
-    checkErr(errNum, "clCreateKernel(square)");
+    checkErr(errNum, "clCreateKernel(concurrent_square)");
  
     cl_kernel kernel1 = clCreateKernel(
      program1,
-     "cube",
+     "concurrent_inc",
      &errNum);
-    checkErr(errNum, "clCreateKernel(cube)");
+    checkErr(errNum, "clCreateKernel(concurrent_inc)");
 
     errNum = clSetKernelArg(kernel0, 0, sizeof(cl_mem), (void *)&buffer0);
-    checkErr(errNum, "clSetKernelArg(square)");
+    checkErr(errNum, "clSetKernelArg(concurrent_square)");
 
     errNum = clSetKernelArg(kernel1, 0, sizeof(cl_mem), (void *)&buffer1);
-    checkErr(errNum, "clSetKernelArg(cube)");
+    checkErr(errNum, "clSetKernelArg(concurrent_inc)");
  
     // Write input data
     errNum = clEnqueueWriteBuffer(
@@ -295,75 +317,79 @@ int main(int argc, char** argv)
       NULL,
       NULL);
  
-    std::vector<cl_event> events;
-    // call kernel for each device
-    cl_event event0;
+    for(int i=0; i<numRuns; i++)
+    {
+        std::vector<cl_event> events;
+        // call kernel for each device
+        cl_event event0;
 
-    size_t gWI = NUM_BUFFER_ELEMENTS;
+        size_t gWI = NUM_BUFFER_ELEMENTS;
 
-    errNum = clEnqueueNDRangeKernel(
-      queue0, 
-      kernel0, 
-      1, 
-      NULL,
-      (const size_t*)&gWI, 
-      (const size_t*)NULL, 
-      0, 
-      0, 
-      &event0);
+        errNum = clEnqueueNDRangeKernel(
+          queue0, 
+          kernel0, 
+          1, 
+          NULL,
+          (const size_t*)&gWI, 
+          (const size_t*)NULL, 
+          0, 
+          0, 
+          &event0);
 	
- 	cl_event event1;
- 	errNum = clEnqueueMarker(queue1, &event1);
+     	cl_event event1;
+     	errNum = clEnqueueMarker(queue1, &event1);
 
-    errNum = clEnqueueNDRangeKernel(
-      queue1, 
-      kernel1, 
-      1, 
-      NULL,
-      (const size_t*)&gWI, 
-      (const size_t*)NULL, 
-      0, 
-      0, 
-      &event0); 
- 	
- 	//Wait for queue 1 to complete before continuing on queue 0
- 	errNum = clEnqueueBarrier(queue0);
- 	errNum = clEnqueueWaitForEvents(queue0, 1, &event1);
+        errNum = clEnqueueNDRangeKernel(
+          queue1, 
+          kernel1, 
+          1, 
+          NULL,
+          (const size_t*)&gWI, 
+          (const size_t*)NULL, 
+          0, 
+          0, 
+          &event0); 
+     	
+     	//Wait for queue 1 to complete before continuing on queue 0
+     	errNum = clEnqueueBarrier(queue0);
+     	errNum = clEnqueueWaitForEvents(queue0, 1, &event1);
 
- 	// Read back computed data
-   	clEnqueueReadBuffer(
-            queue0,
-            buffer0,
-            CL_TRUE,
-            0,
-            sizeof(int) * NUM_BUFFER_ELEMENTS * numDevices,
-            (void*)inputOutput0,
-            0,
-            NULL,
-            NULL);
-   	clEnqueueReadBuffer(
-            queue1,
-            buffer1,
-            CL_TRUE,
-            0,
-            sizeof(int) * NUM_BUFFER_ELEMENTS * numDevices,
-            (void*)inputOutput1,
-            0,
-            NULL,
-            NULL);
- 
-    // Display output in rows
-    for (unsigned elems = 0; elems < NUM_BUFFER_ELEMENTS; elems++)
-    {
-     std::cout << " " << inputOutput0[elems];
+     	// Read back computed data
+       	clEnqueueReadBuffer(
+                queue0,
+                buffer0,
+                CL_TRUE,
+                0,
+                sizeof(int) * NUM_BUFFER_ELEMENTS * numDevices,
+                (void*)inputOutput0,
+                0,
+                NULL,
+                NULL);
+       	clEnqueueReadBuffer(
+                queue1,
+                buffer1,
+                CL_TRUE,
+                0,
+                sizeof(int) * NUM_BUFFER_ELEMENTS * numDevices,
+                (void*)inputOutput1,
+                0,
+                NULL,
+                NULL);
+     
+        // Display output in rows
+        for (unsigned elems = 0; elems < NUM_BUFFER_ELEMENTS; elems++)
+        {
+         std::cout << " " << inputOutput0[elems];
+        }
+        std::cout << std::endl;
+     
+        for (unsigned elems = 0; elems < NUM_BUFFER_ELEMENTS; elems++)
+        {
+         std::cout << " " << inputOutput1[elems];
+        }
+        std::cout << std::endl;
+
     }
-    std::cout << std::endl;
- 
-    for (unsigned elems = 0; elems < NUM_BUFFER_ELEMENTS; elems++)
-    {
-     std::cout << " " << inputOutput1[elems];
-    }
-    std::cout << std::endl;
  
     std::cout << "Program completed successfully" << std::endl;
 

@@ -1,26 +1,39 @@
 clear;
 
+#Needed for awgn
+pkg load communications;
+
+#Signal parameters
 Fs = 1e6;
 N = 4096;
 n = 0:N-1;
-f1 = 10000;
-f2 = 410000;
+freqArr = [10000 410000];
+ampArr = [1 1];
 
-I = 0.5*cos(2*pi.*n*f1/Fs) + 0.5*cos(2*pi.*n*f2/Fs);
-Q = 0.5*sin(2*pi.*n*f1/Fs) + 0.5*sin(2*pi.*n*f2/Fs);
+#Generate sin waves
+I = zeros(1, N);
+Q = zeros(1, N);
+for i = 1:length(freqArr)
+  I += ampArr(i)/length(freqArr) .* cos(2*pi.*n*freqArr(i)/Fs);
+  Q += ampArr(i)/length(freqArr) .* sin(2*pi.*n*freqArr(i)/Fs);
+end  
 
-arr = complex(I,Q);
+#Combine into complex pairs
+arr = awgn(complex(I,Q), 30);
 
+#Generate FFT plots
 f_axis = linspace(-Fs/2,Fs/2,length(arr));
 freq_spec = fftshift(20*log10( abs(fft(arr))/length(arr) ));
 
+#Plot figures
 plot(f_axis, freq_spec);
 xlabel('Freq (Hz)');
 ylabel('dB');
 
+#Write files
 fileName = "inputIQ.txt";
 fid = fopen(fileName, 'w+');
 for i = 1:N
-  fprintf(fid, "%f,%f\r\n", I(i), Q(i));
+  fprintf(fid, "%f,%f\r\n", real(arr(i)), imag(arr(i)));
 end
 fclose(fid);

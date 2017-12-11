@@ -69,7 +69,7 @@ int main ( int argc, char **argv )
 
   printf("*********** CDAC - Tech Workshop : hyPACK-2013 \n"); 
   printf("\n Size of array : %d \n", sizeOfArray); 
-  printf("\n Time taken: %3.1f ms \n", elapsedTime); 
+  printf("\n Time taken: %f ms \n", elapsedTime); 
 
   cudaFreeHost(host_a); 
   cudaFreeHost(host_b); 

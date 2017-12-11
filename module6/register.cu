@@ -61,7 +61,7 @@ __host__ void gpu_kernel(void)
 
         cudaFree((void* ) data_gpu);
         cudaDeviceReset();
-        wait_exit();
+        //wait_exit();
 }
 
 void execute_host_functions()
