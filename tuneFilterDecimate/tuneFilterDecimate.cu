@@ -4,10 +4,15 @@
 #include <unistd.h>
 #include <cstdlib>
 
-#define NUM_ELEMENTS 4096
+//Data parameters
 #define SHOW_ELAPSED_TIME 1
 
+//DSP parameters
+#define SAMP_FREQ 1e6
+#define FREQ_SHIFT -350000
+
 //Coefficients for FIR
+#define DECIMATION_RATE 2
 #define FIR_SIZE 64
 const int fir_size_in_bytes = FIR_SIZE * sizeof(float);
 __constant__ float fir_coef [FIR_SIZE];
@@ -23,7 +28,7 @@ float *cpu_Q_result_buffer;
 unsigned int array_size;
 unsigned int array_size_in_bytes;
 unsigned int num_threads = FIR_SIZE;
-unsigned int num_blocks = NUM_ELEMENTS;
+unsigned int num_blocks = 4096;
 
 //Function to copy data into shared memory. Includes thread sync
 __device__ 
@@ -61,15 +66,6 @@ void cMult(const float Ai, const float Aq, const float Bi, const float Bq, float
 __device__
 void sum_array(float * sdata, const unsigned int blockSize, const unsigned int tid)
 {
-//Temporary fix
-#if 0
-    if(tid==0)
-    {
-        for(unsigned int i=1; i<blockSize; i++)
-            sdata[0] += sdata[i];
-    }
-    return;
-#endif
     for (unsigned int s=blockSize/2; s>0; s>>=1) {
         if(tid < s) 
         {
@@ -77,46 +73,6 @@ void sum_array(float * sdata, const unsigned int blockSize, const unsigned int t
         }
         __syncthreads();
     }
-    return;
-
-
-//TODO: Figure out why this parallel adder doesn't work
-    if(blockSize >= 512) 
-    {
-        if(tid < 256) 
-            sdata[tid] += sdata[tid + 256];
-        __syncthreads(); 
-    }
-    
-    if(blockSize >= 256) 
-    {
-        if(tid < 128) 
-            sdata[tid] += sdata[tid + 128]; 
-        __syncthreads(); 
-    }
-
-    if(blockSize >= 128) {
-        if(tid <  64)  
-            sdata[tid] += sdata[tid +   64]; 
-        __syncthreads(); 
-    }
-    
-    if(tid < 32)
-    {
-        if (blockSize >=  64)
-            sdata[tid] += sdata[tid + 32];
-        if (blockSize >=  32)
-            sdata[tid] += sdata[tid + 16];
-        if (blockSize >=  16)
-            sdata[tid] += sdata[tid +  8];
-        if (blockSize >=   8)
-            sdata[tid] += sdata[tid +  4]; 
-        if (blockSize >=   4)
-            sdata[tid] += sdata[tid +  2]; 
-        if (blockSize >=   2)
-            sdata[tid] += sdata[tid +  1]; 
-    }
-    __syncthreads();
 }
 
 // Perform a frequency shift via complex multiply
@@ -209,14 +165,14 @@ void main_sub0()
 	cudaMemcpy(gpu_I_in_buffer, cpu_I_in_buffer, array_size_in_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(gpu_Q_in_buffer, cpu_Q_in_buffer, array_size_in_bytes, cudaMemcpyHostToDevice);
 
-    freq_shift<<<num_blocks/32, 32>>>(gpu_I_in_buffer, gpu_Q_in_buffer, gpu_I_mixed_buffer, gpu_Q_mixed_buffer, 0, -10000, 1e6);
-
-    decimate<<<num_blocks, num_threads>>>(gpu_I_mixed_buffer, gpu_I_result_buffer, 1);
-    decimate<<<num_blocks, num_threads>>>(gpu_Q_mixed_buffer, gpu_Q_result_buffer, 1);
+    //Run kernels
+    freq_shift<<<num_blocks/32, 32>>>(gpu_I_in_buffer, gpu_Q_in_buffer, gpu_I_mixed_buffer, gpu_Q_mixed_buffer, 0, FREQ_SHIFT, SAMP_FREQ);
+    decimate<<<num_blocks, num_threads>>>(gpu_I_mixed_buffer, gpu_I_result_buffer, DECIMATION_RATE);
+    decimate<<<num_blocks, num_threads>>>(gpu_Q_mixed_buffer, gpu_Q_result_buffer, DECIMATION_RATE);
     
     // Copy results from GPU to CPU	
-	cudaMemcpy(cpu_I_result_buffer, gpu_I_result_buffer, array_size_in_bytes, cudaMemcpyDeviceToHost);
-    cudaMemcpy(cpu_Q_result_buffer, gpu_Q_result_buffer, array_size_in_bytes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(cpu_I_result_buffer, gpu_I_result_buffer, array_size_in_bytes/DECIMATION_RATE, cudaMemcpyDeviceToHost);
+    cudaMemcpy(cpu_Q_result_buffer, gpu_Q_result_buffer, array_size_in_bytes/DECIMATION_RATE, cudaMemcpyDeviceToHost);
 
 #if SHOW_ELAPSED_TIME
     // Stop timer
@@ -255,7 +211,7 @@ int main(int argc, char *argv[])
     // -v Sets verbose flag - shows math results
 
     int c;
-    //bool showMathResults = false;
+    bool showMathResults = false;
     
     while ((c = getopt (argc, argv, "b:t:v")) != -1)
     switch (c)
@@ -267,7 +223,7 @@ int main(int argc, char *argv[])
             num_threads = atoi(optarg);
             break;
         case 'v':
-            //showMathResults = true;
+            showMathResults = true;
             break;
         default:
             printf("USAGE:\n-b <int> GPU blocks\n-t <int> GPU threads (each block)\n-v Verbose\n");
@@ -277,7 +233,7 @@ int main(int argc, char *argv[])
     printf("Blocks: %d\nThreads: %d\n", num_blocks, num_threads);
 
     // Calculate buffer size
-    array_size = num_blocks; // * num_threads;
+    array_size = num_blocks;
     array_size_in_bytes = sizeof(float) * (array_size);
 
     // Allocate memory on the CPU
@@ -288,21 +244,14 @@ int main(int argc, char *argv[])
 
     //Load fir
     FILE * iFile;
-    iFile = fopen("fir_dec_2_taps_64.txt", "r");
+    char fileName[100];
+    sprintf(fileName, "fir_dec_%d_taps_%d.txt", DECIMATION_RATE, FIR_SIZE);
+    iFile = fopen(fileName, "r");
     for(unsigned int i=0; i<FIR_SIZE; i++)
         fscanf(iFile, "%f\r\n", &cpu_fir_coef[i]);
     fclose(iFile);
 
     // Generate data to be processed
-#if 0
-    for(unsigned int i=0; i<array_size; i++)
-    {
-        cpu_I_in_buffer[i] = 0.0;
-        cpu_Q_in_buffer[i] = 0.0;
-    }
-    //cpu_I_in_buffer[NUM_ELEMENTS/2] = 1.0;
-    cpu_I_in_buffer[0] = 1.0;
-#else
     float I, Q;
     iFile = fopen("inputIQ.txt", "r+");   
     for(unsigned int i=0; i<array_size; i++)
@@ -312,30 +261,27 @@ int main(int argc, char *argv[])
         cpu_Q_in_buffer[i] = Q;
     }
     fclose(iFile);
-#endif
 
     // Run
     main_sub0();
 
-#if 0
     // Output results
     if(showMathResults)
     {
-	    for(unsigned int i = 0; i < array_size; i++)
+	    for(unsigned int i = 0; i < array_size/DECIMATION_RATE; i++)
 	    {
-		    printf("Calc: %.5f => %.5f\n", cpu_input_buffer[i], cpu_output_buffer[i]);
+		    printf("%.5f, %.5f\n", cpu_I_result_buffer[i], cpu_Q_result_buffer[i]);
 	    }
     }
     printf("\n");
-#else
+
     FILE * oFile;
     oFile = fopen("outputIQ.txt", "w+");
-    for(unsigned int i=0; i<array_size/1; i++)
+    for(unsigned int i=0; i<array_size/DECIMATION_RATE; i++)
     {
         fprintf(oFile, "%f,%f\r\n", cpu_I_result_buffer[i], cpu_Q_result_buffer[i]);
     }
     fclose(oFile);
-#endif
 
     // Done
 	return EXIT_SUCCESS;
