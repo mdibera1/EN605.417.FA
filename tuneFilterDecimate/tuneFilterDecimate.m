@@ -46,3 +46,4 @@ ylim([-100 0]);
 title('Resulting Spectrum - CPU');
 xlabel("Frequency (Hz)");
 ylabel("Amplitude (dB)");
+grid on;

@@ -22,4 +22,5 @@ ylim([-100 0]);
 title('Resulting Spectrum - GPU');
 xlabel("Frequency (Hz)");
 ylabel("Amplitude (dB)");
+grid on;
 
