@@ -106,7 +106,6 @@ void decimate(float * input_buffer, float * output_buffer, const unsigned int de
     //Who am I?
     const unsigned int thread_id = threadIdx.x;
     const unsigned int block_id = blockIdx.x;
-	//const unsigned int global_index = (blockIdx.x * blockDim.x) + threadIdx.x;
     
     //Perform the convolution as a copy from global (num samples) to shared (FIR width)
     float sample = 0.0;
