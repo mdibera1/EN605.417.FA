@@ -8,7 +8,7 @@ writeFiles = true
 
 #Signal parameters
 Fs = 1e6;
-N = 4096;
+N = 65536;
 n = 0:N-1;
 freqArr = [-1e5 -2e5 3.4e5 3.5e5 3.6e5];
 ampArr = [1 1 1 1 1];
@@ -39,6 +39,7 @@ freq_spec = fftshift(20*log10( abs(fft(arr))/length(arr) ));
 #Plot figures
 plot(f_axis, freq_spec);
 xlim([-Fs/2 Fs/2]);
+ylim([-100 0]);
 xlabel('Frequency (Hz)');
 ylabel('Amplitude (dB)');
 
